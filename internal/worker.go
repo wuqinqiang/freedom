@@ -13,22 +13,63 @@ import (
 )
 
 const (
-	// WorkerKey .
+	// WorkerKey specify where is the Worker should be located in Context
 	WorkerKey = "STORE-WORKER-KEY"
 )
 
-// Worker .
+// Worker describes a global context which use to share the internal component
+// (i.e infrastructure, transaction, logger and so on) with middleware,
+// controller, domain service and etc.
 type Worker interface {
+	// IrisContext point to current iris.Context.
 	IrisContext() iris.Context
+
+	// Logger returns current Logger.
 	Logger() Logger
+
+	// SetLogger set current Logger instead Logger.
 	SetLogger(Logger)
+
+	// Store returns an address to current memstore.Store.
+	//
+	// memstore.Store is a collection of key/value entries. usually use to store metadata produced by freedom runtime.
 	Store() *memstore.Store
+
+	// Bus returns an address to current Bus.
 	Bus() *Bus
+
+	// Context returns current context.
 	Context() stdContext.Context
+
+	// WithContext set current context instead Context.
 	WithContext(stdContext.Context)
+
+	// StartTime returns a time since this Worker be created.
 	StartTime() time.Time
+
+	// DeferRecycle marks the resource won't be recycled immediately after
+	// the request has ended.
+	//
+	// It is a bit hard to understand what is, here is a simply explain about
+	// this.
+	//
+	// When an HTTP request is incoming, the program will probably serve a bunch
+	// of business logic services, DB connections, transactions, Redis caches,
+	// and so on. Once those procedures has done, the system should write
+	// response and release those resource immediately. In other words, the
+	// system should do some clean up procedures for this request. You might
+	// thought it is a matter of course. But in special cases, such as goroutine
+	// without synchronizing-signal. When all business procedures has completed
+	// on business goroutine, and prepare to respond. GC system may be run before
+	// the http handler goroutine to respond to the client. Once this opportunity
+	// was met, the client will got an "Internal Server Error" or other wrong
+	// result, because resource has been recycled by GC before to respond to client.
 	DeferRecycle()
+
+	// IsDeferRecycle indicates system need to wait a while for recycle resource.
 	IsDeferRecycle() bool
+
+	// Rand returns a rand.Rand act a random number seeder.
 	Rand() *rand.Rand
 }
 
@@ -47,6 +88,8 @@ func newWorkerHandle() context.Handler {
 	}
 }
 
+// newWorker creates a Worker from iris.Context. This procedure will read the
+// request header, and also initialize bus with that.
 func newWorker(ctx iris.Context) *worker {
 	work := new(worker)
 	work.freeServices = make([]interface{}, 0)
@@ -60,7 +103,7 @@ func newWorker(ctx iris.Context) *worker {
 	return work
 }
 
-// worker .
+// worker act as a default implementation to Worker.
 type worker struct {
 	ctx          iris.Context
 	freeServices []interface{}
